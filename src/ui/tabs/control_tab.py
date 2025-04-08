@@ -1,3 +1,4 @@
+from typing import Optional
 from PyQt6.QtWidgets import (QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
                              QTextEdit, QProgressBar, QMessageBox)
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot

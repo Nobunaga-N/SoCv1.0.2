@@ -15,7 +15,7 @@ from src.ui.tabs.base_tab import BaseTab
 from src.utils.ldplayer import LDPlayer
 from src.utils.performance import PerformanceMonitor
 from src.models.settings import BotSettings
-
+from src.ui.ui_factory import UIFactory
 
 class LDPlayerDiagnosticsDialog(QDialog):
     """Диалоговое окно для диагностики LDPlayer"""
@@ -175,7 +175,7 @@ class LDPlayerDiagnosticsDialog(QDialog):
             self.append_output(f"Исключение при выполнении команды: {str(e)}")
 
 
-class AdvancedTab(BaseTab):
+class AdvancedTab(QWidget):
     """Вкладка расширенного управления и настроек."""
 
     # Сигналы
@@ -206,7 +206,22 @@ class AdvancedTab(BaseTab):
     ]
 
     def __init__(self, settings: BotSettings, parent=None):
+        """
+        Инициализирует вкладку расширенного управления.
+
+        Args:
+            settings: Настройки бота
+            parent: Родительский виджет
+        """
+        super().__init__(parent)
+
         self.settings = settings
+        self.ui_factory = UIFactory()
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Создаем основной макет
+        self.main_layout = QVBoxLayout(self)
+        self.setLayout(self.main_layout)
 
         # Инициализируем helper после проверки/установки пути
         self.ldplayer_path = self.settings.ldplayer_path or self._find_ldplayer_path_manually()
@@ -221,12 +236,66 @@ class AdvancedTab(BaseTab):
         if settings.performance_monitoring:
             self.performance_monitor.start()
 
-        super().__init__(parent)
-
         # Таймер для обновления данных об эмуляторах
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self._refresh_emulators)
         self.update_timer.start(10000)  # Обновление каждые 10 секунд
+
+        # Инициализируем UI
+        self._init_ui()
+
+    def _create_group(self, title, layout, add_to_main=True):
+        """
+        Создает группу с заданным заголовком и макетом.
+
+        Args:
+            title: Заголовок группы
+            layout: Макет для группы
+            add_to_main: Добавлять ли группу сразу в основной макет
+
+        Returns:
+            Созданная группа
+        """
+        group = self.ui_factory.create_group(title, layout)
+
+        if add_to_main and hasattr(self, 'main_layout'):
+            self.main_layout.addWidget(group)
+
+        return group
+
+    def _create_horizontal_layout(self, add_to_main=False):
+        """
+        Создает горизонтальный макет.
+
+        Args:
+            add_to_main: Добавлять ли макет сразу в основной макет
+
+        Returns:
+            Созданный макет
+        """
+        layout = QHBoxLayout()
+
+        if add_to_main and hasattr(self, 'main_layout'):
+            self.main_layout.addLayout(layout)
+
+        return layout
+
+    def _create_vertical_layout(self, add_to_main=False):
+        """
+        Создает вертикальный макет.
+
+        Args:
+            add_to_main: Добавлять ли макет сразу в основной макет
+
+        Returns:
+            Созданный макет
+        """
+        layout = QVBoxLayout()
+
+        if add_to_main and hasattr(self, 'main_layout'):
+            self.main_layout.addLayout(layout)
+
+        return layout
 
     def _find_ldplayer_path_manually(self) -> Optional[str]:
         """
@@ -238,7 +307,7 @@ class AdvancedTab(BaseTab):
         # Пробуем найти в стандартных местах
         for path in self.COMMON_LDPLAYER_PATHS:
             if os.path.exists(path) and os.path.exists(os.path.join(path, "ldconsole.exe")):
-                self.logger.info(f"Найден LDPlayer по пути: {path}")
+                logging.info(f"Найден LDPlayer по пути: {path}")
                 return path
 
         # Пробуем найти через команду where (если LDPlayer в PATH)
@@ -246,18 +315,16 @@ class AdvancedTab(BaseTab):
             result = subprocess.check_output("where ldconsole.exe", shell=True, text=True, stderr=subprocess.PIPE)
             if result:
                 path = os.path.dirname(result.strip().split('\n')[0])
-                self.logger.info(f"Найден LDPlayer через PATH: {path}")
+                logging.info(f"Найден LDPlayer через PATH: {path}")
                 return path
         except subprocess.CalledProcessError:
             pass
 
-        self.logger.warning("Не удалось автоматически найти LDPlayer")
+        logging.warning("Не удалось автоматически найти LDPlayer")
         return None
 
     def _init_ui(self):
         """Инициализирует компоненты интерфейса."""
-        super()._init_ui()
-
         # Создаем вкладки для различных функций
         tabs = QTabWidget()
 
