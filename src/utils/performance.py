@@ -3,6 +3,7 @@ import time
 import psutil
 import logging
 import threading
+import platform
 from typing import Dict, Any, Optional, List, Tuple
 
 logger = logging.getLogger(__name__)
@@ -167,7 +168,7 @@ class PerformanceMonitor:
                 'disk': disk_info,
                 'platform': {
                     'system': psutil.WINDOWS if os.name == 'nt' else psutil.LINUX if os.name == 'posix' else 'Unknown',
-                    'python_version': psutil.python_version()
+                    'python_version': platform.python_version()
                 }
             }
         except Exception as e:

@@ -89,14 +89,26 @@ class ADB:
         """
         try:
             self.wait_for_interval()
+
+            # Попробуем сначала создать директорию для скриншота, если её нет
+            self.execute_adb_command("shell mkdir -p /sdcard/")
+
+            # Проверим доступность устройства перед скриншотом
+            success, output = self.execute_adb_command("shell echo 'Test connection'")
+            if not success:
+                raise Exception(f"Устройство не отвечает: {output}")
+
             # Сохраняем скриншот в файл на устройстве
-            self.execute_adb_command("shell screencap -p /sdcard/screenshot.png")
+            success, output = self.execute_adb_command("shell screencap -p /sdcard/screenshot.png")
+            if not success:
+                raise Exception(f"Не удалось сделать скриншот: {output}")
 
             # Получаем содержимое файла в виде байтов
-            screenshot_bytes = subprocess.check_output(
-                f"adb {'-s ' + self.device_id if self.device_id else ''} pull /sdcard/screenshot.png -",
-                shell=True
-            )
+            command = f"adb {'-s ' + self.device_id if self.device_id else ''} pull /sdcard/screenshot.png -"
+            try:
+                screenshot_bytes = subprocess.check_output(command, shell=True)
+            except subprocess.CalledProcessError as e:
+                raise Exception(f"Не удалось загрузить скриншот: {e.output if hasattr(e, 'output') else str(e)}")
 
             # Удаляем файл со скриншотом
             self.execute_adb_command("shell rm /sdcard/screenshot.png")

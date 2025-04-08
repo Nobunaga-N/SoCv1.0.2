@@ -15,23 +15,34 @@ class Emulator:
     """Класс для управления эмулятором через ADB и LDPlayer."""
 
     def __init__(self, device_id: Optional[str] = None, ldplayer_path: Optional[str] = None):
-        """
-        Инициализация объекта для управления эмулятором.
-
-        Args:
-            device_id: Идентификатор устройства для ADB (если None, будет получен автоматически)
-            ldplayer_path: Путь к директории LDPlayer (если None, будет найден автоматически)
-        """
         # Инициализация LDPlayer
         self.ldplayer = LDPlayer(ldplayer_path)
         self.ldplayer_index = "0"  # По умолчанию используем первый эмулятор
 
+        # Проверяем, запущен ли эмулятор
+        if self.ldplayer.is_available() and not self.ldplayer.is_running(self.ldplayer_index):
+            logger.warning(f"Эмулятор с индексом {self.ldplayer_index} не запущен")
+            try:
+                # Попытка запустить эмулятор
+                logger.info(f"Попытка запуска эмулятора с индексом {self.ldplayer_index}")
+                self.ldplayer.launch(self.ldplayer_index)
+                # Даем эмулятору время на запуск
+                time.sleep(15)
+            except Exception as e:
+                logger.error(f"Не удалось запустить эмулятор: {e}")
+
         # Получаем device_id, если не указан
         if device_id is None and self.ldplayer.is_available():
-            device_id = self.ldplayer.get_device_id(self.ldplayer_index)
-            if device_id:
-                logger.info(f"Автоматически получен device_id: {device_id}")
-            else:
+            # Пробуем несколько раз получить device_id
+            for _ in range(3):
+                device_id = self.ldplayer.get_device_id(self.ldplayer_index)
+                if device_id:
+                    logger.info(f"Автоматически получен device_id: {device_id}")
+                    break
+                logger.warning("Попытка получения device_id не удалась, ожидание...")
+                time.sleep(5)  # Ждем и пробуем снова
+
+            if not device_id:
                 logger.warning("Не удалось автоматически получить device_id")
 
         # Инициализация ADB

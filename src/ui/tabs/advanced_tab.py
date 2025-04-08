@@ -717,6 +717,50 @@ class AdvancedTab(QWidget):
             # Обновляем список эмуляторов
             self._refresh_emulators()
 
+    def _force_refresh_emulators(self):
+        """Принудительно обновляет список эмуляторов с прямым запросом через subprocess."""
+        self.logger.info("Принудительное обновление списка эмуляторов...")
+
+        if not self.ldplayer_path or not os.path.exists(self.ldplayer_path):
+            self.logger.error(f"Путь к LDPlayer не найден: {self.ldplayer_path}")
+            return
+
+        ldconsole_path = os.path.join(self.ldplayer_path, "ldconsole.exe")
+        if not os.path.exists(ldconsole_path):
+            self.logger.error(f"ldconsole.exe не найден по пути: {ldconsole_path}")
+            return
+
+        try:
+            # Очищаем и обновляем статус
+            self.emulator_combo.clear()
+
+            # Запускаем команду list напрямую
+            cmd = f'"{ldconsole_path}" list'
+            self.logger.info(f"Выполнение команды: {cmd}")
+
+            result = subprocess.check_output(cmd, shell=True, text=True, encoding='utf-8')
+            self.logger.info(f"Результат команды list: {result}")
+
+            # Анализируем результат
+            lines = result.strip().split('\n')
+            for line in lines:
+                if line.strip():
+                    self.logger.info(f"Добавление эмулятора: {line}")
+                    parts = line.split(',') if ',' in line else line.split()
+                    index = parts[0] if parts else "0"
+                    name = parts[1] if len(parts) > 1 else f"Эмулятор {index}"
+                    self.emulator_combo.addItem(f"{name} (неизвестно)", userData=index)
+
+            # Если ничего не добавили, добавляем эмулятор по умолчанию
+            if self.emulator_combo.count() == 0:
+                self.emulator_combo.addItem("LDPlayer (по умолчанию)", userData="0")
+
+            self.logger.info(f"Найдено {self.emulator_combo.count()} эмуляторов")
+
+        except Exception as e:
+            self.logger.error(f"Ошибка при принудительном обновлении списка эмуляторов: {e}")
+            self.emulator_combo.addItem(f"Ошибка: {str(e)}")
+
     def _update_server_range(self):
         """Обновляет диапазон серверов в зависимости от выбранного сезона."""
         current_season = self.season_combo.currentText()

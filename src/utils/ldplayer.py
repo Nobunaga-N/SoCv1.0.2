@@ -99,11 +99,27 @@ class LDPlayer:
         try:
             full_command = f'"{self.ldconsole_path}" {command}'
             logger.debug(f"Выполнение команды: {full_command}")
-            result = subprocess.check_output(full_command, shell=True, text=True, stderr=subprocess.STDOUT)
-            return True, result.strip()
+
+            # Используем utf-8 encoding для корректного чтения русских символов
+            process = subprocess.Popen(
+                full_command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8'
+            )
+
+            stdout, stderr = process.communicate(timeout=10)
+
+            if process.returncode != 0:
+                logger.warning(f"Команда вернула ненулевой код: {process.returncode}")
+                logger.warning(f"STDERR: {stderr}")
+
+            return True, stdout.strip()
         except subprocess.CalledProcessError as e:
-            logger.error(f"Ошибка выполнения команды ldconsole: {e.output}")
-            return False, e.output
+            logger.error(f"Ошибка выполнения команды ldconsole: {e.output if hasattr(e, 'output') else str(e)}")
+            return False, str(e)
         except Exception as e:
             logger.error(f"Неизвестная ошибка при выполнении команды ldconsole: {e}")
             return False, str(e)
@@ -129,14 +145,48 @@ class LDPlayer:
                 continue
 
             # Парсим строку с информацией об эмуляторе
-            parts = line.split(',')
-            if len(parts) >= 2:
+            # Проверяем различные форматы (запятая или другие разделители)
+            if ',' in line:
+                parts = line.split(',')
+            elif '\t' in line:
+                parts = line.split('\t')
+            elif '|' in line:
+                parts = line.split('|')
+            else:
+                # Если нет известных разделителей, попробуем считать первым
+                # токеном индекс, а вторым имя
+                parts = line.strip().split(None, 1)
+                if len(parts) < 2:
+                    parts = [parts[0], "Эмулятор " + parts[0]] if parts else []
+
+            if len(parts) >= 1:
+                # Если есть хотя бы индекс, можем добавить эмулятор
+                index = parts[0].strip()
+                name = parts[1].strip() if len(parts) >= 2 else f"Эмулятор {index}"
+
+                try:
+                    # Попробуем проверить статус работы, но если не удается,
+                    # просто считаем что эмулятор доступен для использования
+                    is_running = self.is_running(index)
+                except:
+                    logger.warning(f"Не удалось проверить статус эмулятора {index}, считаем его остановленным")
+                    is_running = False
+
                 emulator = {
-                    'index': parts[0],
-                    'name': parts[1],
-                    'status': 'running' if self.is_running(parts[0]) else 'stopped'
+                    'index': index,
+                    'name': name,
+                    'status': 'running' if is_running else 'stopped'
                 }
                 emulators.append(emulator)
+
+        # Если список все равно пуст, добавим хотя бы первый эмулятор по умолчанию
+        if not emulators:
+            logger.warning("Список эмуляторов пуст, добавляем эмулятор по умолчанию")
+            emulators.append({
+                'index': "0",
+                'name': "LDPlayer",
+                'status': 'unknown'
+            })
 
         return emulators
 
@@ -150,12 +200,18 @@ class LDPlayer:
         Returns:
             True, если эмулятор запущен, иначе False
         """
-        success, result = self._run_ldconsole_command(f"isrunning --index {index}")
+        try:
+            success, result = self._run_ldconsole_command(f"isrunning --index {index}")
 
-        if not success:
+            if not success:
+                logger.warning(f"Не удалось проверить статус эмулятора {index}")
+                return False
+
+            # Более гибкая проверка статуса
+            return "running" in result.lower() or "1" in result.strip()
+        except Exception as e:
+            logger.error(f"Ошибка при проверке статуса эмулятора {index}: {e}")
             return False
-
-        return "running" in result.lower()
 
     def launch(self, index: str = "0") -> bool:
         """
